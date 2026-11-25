@@ -120,25 +120,27 @@ func (s MemberSource) Load(ctx context.Context) ([]string, error) {
 	return ParseMembers(text.String()), nil
 }
 
-// Refresh loads the members now and then every interval. A failed or empty
-// load keeps the previous list: a hiccup in noscat must not lock the mesh
-// out (or, worse, open the relay to nobody's list).
-func (s MemberSource) Refresh(ctx context.Context, a *Allowlist, every time.Duration) {
-	load := func() {
-		pks, err := s.Load(ctx)
-		switch {
-		case err != nil:
-			log.Printf("members: %s; keeping %d", err, a.Len())
-		case len(pks) == 0:
-			log.Printf("members: source listed nobody; keeping %d", a.Len())
-		default:
-			if before := a.Len(); before != len(pks) {
-				log.Printf("members: %d (was %d)", len(pks), before)
-			}
-			a.Set(pks)
+// Update loads the members into a. A failed or empty load keeps the
+// previous list: a hiccup in noscat must not lock the mesh out (or, worse,
+// open the relay to nobody's list).
+func (s MemberSource) Update(ctx context.Context, a *Allowlist) {
+	pks, err := s.Load(ctx)
+	switch {
+	case err != nil:
+		log.Printf("members: %s; keeping %d", err, a.Len())
+	case len(pks) == 0:
+		log.Printf("members: source listed nobody; keeping %d", a.Len())
+	default:
+		if before := a.Len(); before != len(pks) {
+			log.Printf("members: %d (was %d)", len(pks), before)
 		}
+		a.Set(pks)
 	}
-	load()
+}
+
+// Refresh loads the members now and then every interval.
+func (s MemberSource) Refresh(ctx context.Context, a *Allowlist, every time.Duration) {
+	s.Update(ctx, a)
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
@@ -146,7 +148,29 @@ func (s MemberSource) Refresh(ctx context.Context, a *Allowlist, every time.Dura
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			load()
+			s.Update(ctx, a)
 		}
 	}
+}
+
+// Reloader reloads the member list on demand, at most once per interval:
+// a device that joined (or a mesh made private) moments ago is let in at
+// once instead of at the next scheduled refresh. Callers wait for a reload
+// in progress, so they see its result.
+type Reloader struct {
+	Every time.Duration
+	Load  func()
+
+	mu   sync.Mutex
+	last time.Time
+}
+
+func (r *Reloader) Reload() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if time.Since(r.last) < r.Every {
+		return
+	}
+	r.Load()
+	r.last = time.Now()
 }

@@ -18,6 +18,10 @@ forked from nip46-relay 1.0.0. Releases before this one are nip46-relay's.
 - Member list from `MEMBERS_COMMAND` (e.g. `noscat mesh members`) and/or
   `MEMBERS_FILE`, re-read every `MEMBERS_REFRESH_SECONDS`; a failed or empty
   read keeps the previous list.
+- The member list is also reloaded at once (at most every two seconds)
+  when a logged-in key it does not have asks for group messages or key
+  packages, so a device that just joined, or a mesh just made private, is
+  let in right away.
 - A removed member's open subscriptions stop receiving group messages and
   key packages at once.
 - Scoped reads: group messages by `#h`, gift wraps by `#p` (your own only),

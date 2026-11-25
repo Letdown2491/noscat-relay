@@ -151,6 +151,8 @@ func main() {
 		MemberLimit:     NewRateLimiter(cfg.MemberRatePerMinute, time.Minute),
 		JoinLimit:       NewRateLimiter(cfg.JoinRatePerMinute, time.Minute),
 	}
+	reloader := &Reloader{Every: 2 * time.Second, Load: func() { source.Update(ctx, members) }}
+	policy.OnMiss = reloader.Reload
 	relay := newRelay(cfg, store, policy)
 	go pruneLoop(ctx, store, time.Duration(cfg.RetentionDays)*24*time.Hour)
 

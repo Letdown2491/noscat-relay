@@ -19,7 +19,7 @@ Every connection logs in with its device key (NIP-42) before it reads or writes 
 
 Everything else is refused. A device that is not a member yet can still join through this relay alone: it publishes its key package, relay lists and a join request, and picks up its invitation. Group traffic stays members only.
 
-- **Members** come from the mesh itself: the output of `noscat mesh members` (or a file), re-read every minute. A failed read keeps the previous list.
+- **Members** come from the mesh itself: the output of `noscat mesh members` (or a file), re-read every minute, and at once (at most every two seconds) when a logged-in key the relay does not know asks for group messages or key packages, so a device that just joined is let in right away. A failed read keeps the previous list.
 - **Removal is immediate**: a removed device's open subscriptions stop receiving group messages, and its next query or event is refused.
 - **Retention**: group messages and gift wraps are deleted after 30 days (configurable). A device offline for longer cannot catch up and must rejoin. Relay lists and key packages are replaceable and kept.
 - **Timestamps**: within 15 minutes of now; gift wraps may be backdated up to two days, as NIP-59 allows.
@@ -78,9 +78,22 @@ Docker works too (`docker compose up -d`), with `MEMBERS_FILE` instead of `MEMBE
 | `WORKING_DIR` | `./noscat-relay-data` | Data directory |
 | `RELAY_NAME`, `RELAY_DESCRIPTION`, `RELAY_PUBKEY`, `RELAY_CONTACT`, `RELAY_ICON`, `RELAY_BANNER` | | NIP-11 information |
 
-## What noscat needs first
+## Moving a mesh onto it
 
-The relay is ready; noscat cannot use it yet. It needs to log in to relays (NIP-42, only to relays marked as the mesh's own), a way to set a mesh's relays, and a way to drop the public defaults. See [noscat#18](https://github.com/Letdown2491/noscat/issues/18).
+Needs noscat from `main` (0.5.0, not released yet). On any member:
+
+```bash
+noscat mesh relays add wss://relay.example.com
+noscat mesh private        # devices use only the mesh's relays, and log in to them
+noscat mesh relays remove wss://relay.snort.social   # and the other public ones
+noscat mesh relays         # check
+```
+
+`mesh private` publishes on the relays in use until then, so members that are offline pick it up from the public relays when they come back. From then on every device uses only the mesh's relays and logs in to them with its device key; noscat never logs in to any other relay.
+
+New devices join with a member's QR (`noscat mesh qr`, or the one `noscat up` prints), which now names the relay: `noscat:npub1...?relay=wss%3A%2F%2Frelay.example.com`. Scanning it in the apps, or `noscat mesh join '<that code>'`, joins through this relay alone.
+
+A new mesh can start here directly: `noscat --relay wss://relay.example.com up`, then `noscat mesh create <name>` and `noscat mesh private`.
 
 ## Development
 

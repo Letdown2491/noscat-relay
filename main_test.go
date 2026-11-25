@@ -146,3 +146,22 @@ func TestParseMembers(t *testing.T) {
 		t.Fatalf("ParseMembers = %v, want [%s %s]", got, pk, memberPK)
 	}
 }
+
+// A member the list does not have yet is let in after an on-demand reload,
+// and reloads are rate limited.
+func TestRecheckReloadsOnMiss(t *testing.T) {
+	p := testPolicy()
+	loads := 0
+	r := &Reloader{Every: time.Hour, Load: func() { loads++; p.Members.Set([]string{memberPK, joinerPK}) }}
+	p.OnMiss = r.Reload
+	h := nostr.Tag{"h", "00"}
+	if reject, msg := p.CheckEvent(ev(KindGroup, randomPK, 0, h), joinerPK, ""); reject {
+		t.Fatalf("new member refused after reload: %s", msg)
+	}
+	if reject, _ := p.CheckFilter(nostr.Filter{Kinds: []int{KindGroup}, Tags: nostr.TagMap{"h": {"00"}}}, randomPK); !reject {
+		t.Fatal("outsider let in")
+	}
+	if loads != 1 {
+		t.Fatalf("%d reloads, want 1 (rate limited)", loads)
+	}
+}

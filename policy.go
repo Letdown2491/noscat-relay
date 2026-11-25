@@ -49,6 +49,19 @@ type Policy struct {
 	MemberLimit     *RateLimiter // per authenticated member npub
 	JoinLimit       *RateLimiter // per non-member npub and per IP
 	Now             func() time.Time
+	// OnMiss reloads the member list (rate limited, see Reloader) when a
+	// logged-in key that is not a member asks for something only members
+	// get: it may have joined since the last refresh.
+	OnMiss func()
+}
+
+// recheck reloads the members (when OnMiss is set) and asks again.
+func (p *Policy) recheck(pk string) bool {
+	if p.OnMiss == nil {
+		return false
+	}
+	p.OnMiss()
+	return p.Members.Has(pk)
 }
 
 func (p *Policy) now() time.Time {
@@ -100,6 +113,9 @@ func (p *Policy) CheckEvent(evt *nostr.Event, authed, ip string) (reject bool, m
 	member := p.Members.Has(authed)
 	if evt.Kind == KindGroup {
 		if !member {
+			member = p.recheck(authed)
+		}
+		if !member {
 			return true, "restricted: group messages are for mesh members only"
 		}
 		h, ok := firstTag(evt, "h")
@@ -140,6 +156,9 @@ func (p *Policy) CheckFilter(f nostr.Filter, authed string) (reject bool, msg st
 		switch k {
 		case KindGroup:
 			if !member {
+				member = p.recheck(authed)
+			}
+			if !member {
 				return true, "restricted: group messages are for mesh members only"
 			}
 			if len(f.Tags["h"]) == 0 {
@@ -156,6 +175,9 @@ func (p *Policy) CheckFilter(f nostr.Filter, authed string) (reject bool, msg st
 				}
 			}
 		case KindKeyPackage:
+			if !member {
+				member = p.recheck(authed)
+			}
 			if !member {
 				return true, "restricted: key packages are for mesh members only"
 			}
