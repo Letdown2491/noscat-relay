@@ -2,6 +2,48 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.0] - 2026-11-25
+
+First release as noscat-relay: a members-only relay for one noscat mesh,
+forked from nip46-relay 1.0.0. Releases before this one are nip46-relay's.
+
+### Added
+
+- Accepts only noscat's kinds: 445 (group messages), 1059 (gift wraps),
+  30443 (key packages), 10050 and 10002 (inbox and relay lists).
+- NIP-42 login required for every read and write. Group messages and key
+  packages are for members only; a device that is not a member yet may
+  publish its own key package and relay lists and gift wraps, and read gift
+  wraps addressed to it, so it can join through this relay alone.
+- Member list from `MEMBERS_COMMAND` (e.g. `noscat mesh members`) and/or
+  `MEMBERS_FILE`, re-read every `MEMBERS_REFRESH_SECONDS`; a failed or empty
+  read keeps the previous list.
+- A removed member's open subscriptions stop receiving group messages and
+  key packages at once.
+- Scoped reads: group messages by `#h`, gift wraps by `#p` (your own only),
+  device-authored kinds by author.
+- Optional `GROUPS` allowlist of `#h` routing ids.
+- Retention by age (`RETENTION_DAYS`, default 30) for group messages and
+  gift wraps, pruned hourly in batches.
+- Per-kind time window: gift wraps may be backdated up to two days (NIP-59).
+- Rate limits per member and per joining device and IP
+  (`MEMBER_RATE_PER_MINUTE`, `JOIN_RATE_PER_MINUTE`), and `MAX_CONTENT_KB`.
+- Unlimited group message queries get the full result cap, so a device
+  catching up is not handed a truncated slice.
+- End-to-end test against a live relay (member, joining device, outsider).
+
+### Changed
+
+- Storage is badger on disk with synchronous writes, sized for a 1 GB box.
+- Listens on `127.0.0.1:3340` by default, for Caddy in front.
+- The systemd unit is a user unit, next to `noscat service install`.
+
+### Removed
+
+- The in-memory store and its byte budget (`STORAGE_BACKEND`,
+  `MAX_MEMORY_MB`, `KEEP_IN_MINUTES`): a mesh's commits must survive
+  restarts.
+
 ## [1.0.0] - 2026-06-14
 
 First stable release. Graduates the relay from beta and makes the in-memory

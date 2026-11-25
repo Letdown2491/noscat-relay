@@ -1,0 +1,18 @@
+# A systemd *user* unit, so the relay runs as the same user as
+# `noscat service install` and its MEMBERS_COMMAND reaches that device.
+#   mkdir -p ~/.config/systemd/user && cp noscat-relay.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now noscat-relay
+#   loginctl enable-linger "$USER"   # keep it running without a login
+[Unit]
+Description=noscat relay (members-only Nostr relay for a noscat mesh)
+
+[Service]
+Type=simple
+WorkingDirectory=%h/noscat-relay
+ExecStart=%h/noscat-relay/noscat-relay
+EnvironmentFile=%h/noscat-relay/.env
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

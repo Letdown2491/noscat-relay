@@ -1,21 +1,22 @@
 services:
-  nip46-relay:
+  noscat-relay:
     build: .
-    container_name: nip46-relay
+    container_name: noscat-relay
     restart: unless-stopped
     ports:
-      - "3334:3334"
-    # Relay configuration comes from .env (copy .env.example to .env).
-    # Optional so `docker compose up` still works before you create it.
+      - "127.0.0.1:3340:3340"
+    # Configuration comes from .env (copy .env.example to .env).
     env_file:
       - path: .env
         required: false
     environment:
-      # Container-specific path; overrides .env so data lands in the volume.
-      # Only used when STORAGE_BACKEND=badger.
+      # Container-specific: listen on all interfaces inside the container and
+      # keep data in the volume. In a container MEMBERS_COMMAND cannot reach a
+      # noscat on the host; use MEMBERS_FILE with a mounted file instead.
+      RELAY_PORT: ":3340"
       WORKING_DIR: "/app/data"
     volumes:
-      - nip46_data:/app/data
+      - noscat_relay_data:/app/data
 
 volumes:
-  nip46_data:
+  noscat_relay_data:

@@ -9,91 +9,66 @@ import (
 	"github.com/nbd-wtf/go-nostr"
 )
 
-func cleanDatabase() {
-	// The in-memory store self-evicts; only the persistent badger backend needs
-	// an external prune + value-log GC cycle.
-	b, ok := store.(*badger.BadgerBackend)
-	if !ok {
-		return
+// pruneLoop deletes group messages and gift wraps older than the retention
+// period, then reclaims badger's value log. Relay lists and key packages are
+// replaceable (one per device), so they are left alone.
+func pruneLoop(ctx context.Context, b *badger.BadgerBackend, retention time.Duration) {
+	run := func() {
+		n := prune(ctx, b, retention)
+		if n > 0 {
+			log.Printf("pruned %d events older than %s", n, retention)
+		}
+		for b.DB != nil && b.RunValueLogGC(0.5) == nil {
+		}
 	}
-
-	// Run cleanup more frequently but with targeted queries
-	// This reduces the batch size and spreads the load
-	ticker := time.NewTicker(time.Duration(config.KeepNotesFor/2+1) * time.Minute)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		pruneOldEvents()
-		// Reclaim disk space from Badger's value log. Deleting events only
-		// writes tombstones; without GC the .vlog files grow unbounded under
-		// this relay's write-then-delete (ephemeral event) workload.
-		runValueLogGC(b)
-	}
-}
-
-// runValueLogGC repeatedly rewrites Badger value-log files until there is
-// nothing left worth reclaiming (RunValueLogGC returns a non-nil error, e.g.
-// badger.ErrNoRewrite). Each successful call rewrites at most one file.
-func runValueLogGC(b *badger.BadgerBackend) {
-	if b == nil || b.DB == nil {
-		return
-	}
+	run()
+	t := time.NewTicker(time.Hour)
+	defer t.Stop()
 	for {
-		if err := b.RunValueLogGC(0.5); err != nil {
-			// ErrNoRewrite (nothing to collect) is the normal stop condition.
+		select {
+		case <-ctx.Done():
 			return
+		case <-t.C:
+			run()
 		}
 	}
 }
 
-func pruneOldEvents() {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+// prune deletes in batches (a query returns at most maxLimit events) until
+// nothing older than the cutoff is left.
+func prune(ctx context.Context, b *badger.BadgerBackend, retention time.Duration) int {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-
-	// Calculate cutoff timestamp - only query events older than retention period
-	cutoff := nostr.Timestamp(time.Now().Add(-time.Duration(config.KeepNotesFor) * time.Minute).Unix())
-
-	// Use Until filter to only fetch expired events instead of full table scan
-	filter := nostr.Filter{
-		Kinds: []int{24133, 24135},
-		Until: &cutoff,
+	cutoff := nostr.Timestamp(time.Now().Add(-retention).Unix())
+	total := 0
+	for ctx.Err() == nil {
+		n := pruneBatch(ctx, b, cutoff)
+		if n == 0 {
+			break
+		}
+		total += n
 	}
+	return total
+}
 
-	// Delete events as they stream in. Badger uses MVCC, so deleting while the
-	// query's read iterator is still open is safe, and avoids buffering the
-	// entire expired set in memory.
-	//
-	// The eventstore producer goroutine sends without selecting on ctx, so we
-	// must always drain the channel to completion (even after a timeout) to
-	// avoid leaking it; we simply stop issuing deletes once ctx is done.
-	timedOut := false
-	for _, qe := range relay.QueryEvents {
-		ch, err := qe(ctx, filter)
-		if err != nil {
-			log.Printf("can't read from database: %s", err.Error())
+func pruneBatch(ctx context.Context, b *badger.BadgerBackend, cutoff nostr.Timestamp) int {
+	ch, err := b.QueryEvents(ctx, nostr.Filter{Kinds: []int{KindGroup, KindGiftWrap}, Until: &cutoff, Limit: maxLimit})
+	if err != nil {
+		log.Printf("prune: %s", err)
+		return 0
+	}
+	// Always drain the channel (the producer does not watch ctx); stop
+	// deleting once the deadline passes.
+	n := 0
+	for ev := range ch {
+		if ctx.Err() != nil {
 			continue
 		}
-
-		for ev := range ch {
-			if timedOut {
-				continue // drain remaining events, but stop deleting
-			}
-			if ctx.Err() != nil {
-				log.Printf("cleanup timeout while pruning expired events")
-				timedOut = true
-				continue
-			}
-			deleteEvent(ctx, ev)
+		if err := b.DeleteEvent(ctx, ev); err != nil {
+			log.Printf("prune: delete %s: %s", ev.ID, err)
+			continue
 		}
+		n++
 	}
-}
-
-func deleteEvent(ctx context.Context, ev *nostr.Event) bool {
-	for _, de := range relay.DeleteEvent {
-		if err := de(ctx, ev); err != nil {
-			log.Printf("can't delete event %s: %s", ev.ID, err.Error())
-			return false
-		}
-	}
-	return true
+	return n
 }

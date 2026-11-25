@@ -9,10 +9,10 @@ docker-compose.yml
 
 # Data directories
 data/
-nip46-relay-data/
+noscat-relay-data/
 
 # Binary
-nip46-relay
+noscat-relay
 
 # Environment
 .env

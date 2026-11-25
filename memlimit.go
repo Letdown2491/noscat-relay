@@ -9,29 +9,20 @@ import (
 	"strings"
 )
 
-// configureMemory tunes the Go runtime for the detected memory ceiling and
-// returns the byte-budget the in-memory event store may use.
-//
-// Two coordinated bounds keep the relay alive on small boxes:
-//   - GOMEMLIMIT (auto-set here only when the operator hasn't configured one)
-//     makes the GC defend a process-wide ceiling instead of letting the heap
-//     overshoot to ~2x the live set (GOGC=100) and OOM.
-//   - the returned event budget caps what the store actually retains.
+// configureMemory sets GOMEMLIMIT for the detected memory ceiling unless the
+// operator set one, so the GC defends a process-wide limit instead of letting
+// the heap overshoot to ~2x the live set and OOM on a small (1 GB) box.
+// Returns the limit in effect (0 = none).
 func configureMemory() int64 {
 	total := detectMemoryLimit()
-
-	// debug.SetMemoryLimit(-1) reports the limit currently in effect: one the
-	// operator set via the GOMEMLIMIT env var, or the runtime default of
-	// math.MaxInt64 ("off"). Respect an explicit limit; only auto-tune when unset.
 	limit := debug.SetMemoryLimit(-1)
-	operatorSet := limit != math.MaxInt64
-
 	switch {
-	case operatorSet:
+	case limit != math.MaxInt64:
 		log.Printf("Memory: respecting configured GOMEMLIMIT (%d MB)", limit>>20)
+		return limit
 	case total > 0:
-		// Reserve headroom for the OS and non-heap runtime memory (stacks,
-		// mmap'd files, etc.): 20% of total, but at least 256 MB.
+		// Headroom for the OS, badger's mmaps and non-heap memory: 20% of
+		// total, at least 256 MB.
 		reserve := total / 5
 		if reserve < 256<<20 {
 			reserve = 256 << 20
@@ -39,25 +30,11 @@ func configureMemory() int64 {
 		if l := total - reserve; l > 0 {
 			debug.SetMemoryLimit(l)
 			log.Printf("Memory: detected %d MB, GOMEMLIMIT set to %d MB", total>>20, l>>20)
+			return l
 		}
-	default:
-		log.Printf("Memory: could not detect a limit; leaving GOMEMLIMIT at default")
 	}
-
-	// Event byte-budget for the in-memory store.
-	switch {
-	case config.MaxMemoryMB > 0:
-		return int64(config.MaxMemoryMB) << 20
-	case operatorSet:
-		// Half the configured soft limit; the rest is runtime + GC headroom.
-		return limit / 2
-	case total > 0:
-		// ~50% of total for event payloads; the rest covers indexes, the Go
-		// runtime, and GC headroom under the auto-set GOMEMLIMIT.
-		return total / 2
-	default:
-		return 256 << 20 // conservative fallback when the limit is unknown
-	}
+	log.Printf("Memory: could not detect a limit; leaving GOMEMLIMIT at default")
+	return 0
 }
 
 // detectMemoryLimit returns the memory ceiling in bytes available to this

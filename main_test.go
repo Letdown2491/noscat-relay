@@ -3,6 +3,7 @@ package main
 import (
 	"runtime/debug"
 	"testing"
+	"time"
 
 	"github.com/nbd-wtf/go-nostr"
 )
@@ -10,55 +11,138 @@ import (
 func TestConfigureMemoryRespectsExplicitLimit(t *testing.T) {
 	prev := debug.SetMemoryLimit(-1)
 	t.Cleanup(func() { debug.SetMemoryLimit(prev) })
-
-	prevMax := config.MaxMemoryMB
-	t.Cleanup(func() { config.MaxMemoryMB = prevMax })
-	config.MaxMemoryMB = 0
-
 	const want = 1500 << 20 // simulate operator GOMEMLIMIT=1500MiB
 	debug.SetMemoryLimit(want)
-
-	budget := configureMemory()
-
-	if got := debug.SetMemoryLimit(-1); got != want {
-		t.Fatalf("GOMEMLIMIT was overridden: got %d, want it left at %d", got, want)
+	if got := configureMemory(); got != want {
+		t.Fatalf("configureMemory() = %d, want %d", got, want)
 	}
-	if budget != want/2 {
-		t.Fatalf("event budget = %d, want %d (half the configured limit)", budget, want/2)
+	if got := debug.SetMemoryLimit(-1); got != want {
+		t.Fatalf("GOMEMLIMIT was overridden: got %d, want %d", got, want)
 	}
 }
 
-func TestRejectFilter(t *testing.T) {
+const (
+	memberPK = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	joinerPK = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	randomPK = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+)
+
+var fixedNow = time.Unix(1_800_000_000, 0)
+
+func testPolicy() *Policy {
+	return &Policy{
+		Members:         NewAllowlist(memberPK),
+		Window:          15 * time.Minute,
+		MaxContentBytes: 1024,
+		Now:             func() time.Time { return fixedNow },
+	}
+}
+
+func ev(kind int, pubkey string, age time.Duration, tags ...nostr.Tag) *nostr.Event {
+	return &nostr.Event{Kind: kind, PubKey: pubkey, CreatedAt: nostr.Timestamp(fixedNow.Add(-age).Unix()), Tags: tags}
+}
+
+func TestCheckEvent(t *testing.T) {
+	h := nostr.Tag{"h", "00"}
+	cases := []struct {
+		name   string
+		evt    *nostr.Event
+		authed string
+		reject bool
+	}{
+		{"not a noscat kind", ev(1, memberPK, 0), memberPK, true},
+		{"not logged in", ev(KindGroup, randomPK, 0, h), "", true},
+		{"member group message", ev(KindGroup, randomPK, 0, h), memberPK, false},
+		{"group message without h", ev(KindGroup, randomPK, 0), memberPK, true},
+		{"non-member group message", ev(KindGroup, randomPK, 0, h), joinerPK, true},
+		{"joiner key package", ev(KindKeyPackage, joinerPK, 0), joinerPK, false},
+		{"joiner inbox relays", ev(KindInbox, joinerPK, 0), joinerPK, false},
+		{"someone else's key package", ev(KindKeyPackage, memberPK, 0), joinerPK, true},
+		{"joiner gift wrap (join request)", ev(KindGiftWrap, randomPK, 0), joinerPK, false},
+		{"gift wrap backdated two days", ev(KindGiftWrap, randomPK, 47*time.Hour), memberPK, false},
+		{"gift wrap backdated three days", ev(KindGiftWrap, randomPK, 72*time.Hour), memberPK, true},
+		{"group message an hour old", ev(KindGroup, randomPK, time.Hour, h), memberPK, true},
+		{"from the future", ev(KindGroup, randomPK, -time.Hour, h), memberPK, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, msg := testPolicy().CheckEvent(tc.evt, tc.authed, "")
+			if got != tc.reject {
+				t.Fatalf("CheckEvent = %v (%q), want %v", got, msg, tc.reject)
+			}
+		})
+	}
+}
+
+func TestCheckEventLimits(t *testing.T) {
+	p := testPolicy()
+	big := ev(KindGiftWrap, randomPK, 0)
+	big.Content = string(make([]byte, 2048))
+	if r, _ := p.CheckEvent(big, memberPK, ""); !r {
+		t.Fatal("oversized content accepted")
+	}
+	p.Groups = map[string]bool{"11": true}
+	if r, _ := p.CheckEvent(ev(KindGroup, randomPK, 0, nostr.Tag{"h", "22"}), memberPK, ""); !r {
+		t.Fatal("group message for another group accepted")
+	}
+	if r, msg := p.CheckEvent(ev(KindGroup, randomPK, 0, nostr.Tag{"h", "11"}), memberPK, ""); r {
+		t.Fatalf("group message for a served group rejected: %s", msg)
+	}
+	p.JoinLimit = NewRateLimiter(2, time.Minute)
+	for i := 0; i < 2; i++ {
+		if r, msg := p.CheckEvent(ev(KindGiftWrap, randomPK, 0), joinerPK, "1.2.3.4"); r {
+			t.Fatalf("join %d rejected: %s", i, msg)
+		}
+	}
+	if r, _ := p.CheckEvent(ev(KindGiftWrap, randomPK, 0), joinerPK, "1.2.3.4"); !r {
+		t.Fatal("joiner past its rate limit accepted")
+	}
+}
+
+func TestCheckFilter(t *testing.T) {
+	h := nostr.TagMap{"h": {"00"}}
 	cases := []struct {
 		name   string
 		filter nostr.Filter
+		authed string
 		reject bool
 	}{
-		// Legitimate signer queries: scoped to a pubkey -> allowed.
-		{"signer by #p", nostr.Filter{Kinds: []int{24133}, Tags: nostr.TagMap{"p": {"x"}}}, false},
-		{"signer by author", nostr.Filter{Kinds: []int{24135}, Authors: []string{"x"}}, false},
-
-		// Firehose attempts: could match stored NIP-46 events, not scoped -> rejected.
-		{"nip46 kind unscoped", nostr.Filter{Kinds: []int{24133}}, true},
-		{"open kinds unscoped", nostr.Filter{}, true},
-		{"limit only, no kinds", nostr.Filter{Limit: 1}, true},
-		{"nip46 mixed kinds unscoped", nostr.Filter{Kinds: []int{24133, 1}}, true},
-
-		// Monitor / non-NIP-46 probes: match nothing we store -> allowed (empty EOSE).
-		{"monitor kind 1", nostr.Filter{Kinds: []int{1}, Limit: 1}, false},
-		{"kind 1 scoped", nostr.Filter{Kinds: []int{1}, Tags: nostr.TagMap{"p": {"x"}}}, false},
-
-		// Id-scoped queries are allowed even without authors/#p.
-		{"id scoped", nostr.Filter{IDs: []string{"abc"}}, false},
-		{"nip46 kind id scoped", nostr.Filter{Kinds: []int{24133}, IDs: []string{"abc"}}, false},
+		{"not logged in", nostr.Filter{Kinds: []int{KindGroup}, Tags: h}, "", true},
+		{"no kinds", nostr.Filter{Tags: h}, memberPK, true},
+		{"member groups by h", nostr.Filter{Kinds: []int{KindGroup}, Tags: h}, memberPK, false},
+		{"member groups unscoped", nostr.Filter{Kinds: []int{KindGroup}}, memberPK, true},
+		{"non-member groups", nostr.Filter{Kinds: []int{KindGroup}, Tags: h}, joinerPK, true},
+		{"own gift wraps", nostr.Filter{Kinds: []int{KindGiftWrap}, Tags: nostr.TagMap{"p": {joinerPK}}}, joinerPK, false},
+		{"someone else's gift wraps", nostr.Filter{Kinds: []int{KindGiftWrap}, Tags: nostr.TagMap{"p": {memberPK}}}, joinerPK, true},
+		{"gift wraps unscoped", nostr.Filter{Kinds: []int{KindGiftWrap}}, memberPK, true},
+		{"member key packages by author", nostr.Filter{Kinds: []int{KindKeyPackage}, Authors: []string{joinerPK}}, memberPK, false},
+		{"non-member key packages", nostr.Filter{Kinds: []int{KindKeyPackage}, Authors: []string{memberPK}}, joinerPK, true},
+		{"joiner reads inbox relays", nostr.Filter{Kinds: []int{KindInbox}, Authors: []string{memberPK}}, joinerPK, false},
+		{"relay lists unscoped", nostr.Filter{Kinds: []int{KindRelayList}}, memberPK, true},
+		{"other kinds: empty answer", nostr.Filter{Kinds: []int{1}}, joinerPK, false},
 	}
-
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, msg := rejectFilter(tc.filter)
+			got, msg := testPolicy().CheckFilter(tc.filter, tc.authed)
 			if got != tc.reject {
-				t.Fatalf("rejectFilter(%+v) = %v (%q), want %v", tc.filter, got, msg, tc.reject)
+				t.Fatalf("CheckFilter = %v (%q), want %v", got, msg, tc.reject)
 			}
 		})
+	}
+}
+
+func TestParseMembers(t *testing.T) {
+	sk := nostr.GeneratePrivateKey()
+	pk, _ := nostr.GetPublicKey(sk)
+	npub := mustNpub(t, pk)
+	text := "mesh \"home\", 3 member(s)\n" +
+		npub + "  motherbox            this device\n" +
+		"# " + randomPK + " commented out\n" +
+		memberPK + "\n" +
+		npub + " again\n" +
+		"npub1bad not one\n"
+	got := ParseMembers(text)
+	if len(got) != 2 || got[0] != pk || got[1] != memberPK {
+		t.Fatalf("ParseMembers = %v, want [%s %s]", got, pk, memberPK)
 	}
 }

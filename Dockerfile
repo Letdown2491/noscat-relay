@@ -1,4 +1,4 @@
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
@@ -7,7 +7,7 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o nip46-relay
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o noscat-relay
 
 FROM alpine:latest
 
@@ -15,10 +15,8 @@ WORKDIR /app
 
 RUN apk add --no-cache ca-certificates
 
-COPY --from=builder /app/nip46-relay .
+COPY --from=builder /app/noscat-relay .
 
-RUN chmod +x nip46-relay
+EXPOSE 3340
 
-EXPOSE 3334
-
-CMD ["./nip46-relay"]
+CMD ["./noscat-relay"]
