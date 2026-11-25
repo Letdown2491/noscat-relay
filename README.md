@@ -91,7 +91,7 @@ noscat mesh relays         # check
 
 `mesh private` publishes on the relays in use until then, so members that are offline pick it up from the public relays when they come back. From then on every device uses only the mesh's relays and logs in to them with its device key; noscat never logs in to any other relay.
 
-New devices join with a member's QR (`noscat mesh qr`, or the one `noscat up` prints), which now names the relay: `noscat:npub1...?relay=wss%3A%2F%2Frelay.example.com`. Scanning it in the apps, or `noscat mesh join '<that code>'`, joins through this relay alone.
+New devices join with a member's QR (`noscat mesh qr`, or the one `noscat up` prints), which now names the relay: `noscat:npub1...?relay=wss%3A%2F%2Frelay.example.com`. Scanning it in the apps, or `noscat mesh join '<that code>'`, joins through this relay alone. When the member whose QR was scanned is the noscat service on this server, approve the request there with `noscat mesh requests` (it asks y/n for each device that asked to join).
 
 A new mesh can start here directly: `noscat --relay wss://relay.example.com up`, then `noscat mesh create <name>` and `noscat mesh private`.
 

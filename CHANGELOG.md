@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.1.0] - 2026-11-25
+## [0.1.0] (2026-11-25)
 
 First release as noscat-relay: a members-only relay for one noscat mesh,
 forked from nip46-relay 1.0.0. Releases before this one are nip46-relay's.
@@ -48,7 +48,7 @@ forked from nip46-relay 1.0.0. Releases before this one are nip46-relay's.
   `MAX_MEMORY_MB`, `KEEP_IN_MINUTES`): a mesh's commits must survive
   restarts.
 
-## [1.0.0] - 2026-06-14
+## [1.0.0] (2026-06-14)
 
 First stable release. Graduates the relay from beta and makes the in-memory
 store the default backend.
@@ -79,7 +79,7 @@ store the default backend.
 - Subscription filters for kinds the relay doesn't store now return an empty
   EOSE instead of a `CLOSED` rejection, so relay monitors (NIP-66) can measure
   read latency and the relay reports as responsive. NIP-46 traffic still must be
-  scoped by `authors`, `#p`, or `ids` — unscoped queries that could match stored
+  scoped by `authors`, `#p`, or `ids`; unscoped queries that could match stored
   signing messages are still rejected, preventing firehose harvesting. Writes
   remain NIP-46-only, so usage is unchanged.
 - The in-memory store now resolves `ids`-scoped queries (direct lookup by event
@@ -123,5 +123,4 @@ store the default backend.
 - `pruneOldEvents` (Badger backend) streams deletes as events arrive instead of
   buffering the entire expired set in memory.
 
-[Unreleased]: https://github.com/Letdown2491/nip46-relay/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/Letdown2491/nip46-relay/releases/tag/v1.0.0

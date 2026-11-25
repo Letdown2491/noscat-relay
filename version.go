@@ -10,7 +10,7 @@ var (
 )
 
 func StringVersion() string {
-	v := fmt.Sprintf("noscat-relay - %d.%d.%d", major, minor, patch)
+	v := fmt.Sprintf("noscat-relay %d.%d.%d", major, minor, patch)
 	if meta != "" {
 		v = fmt.Sprintf("%s-%s", v, meta)
 	}
