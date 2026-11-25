@@ -80,7 +80,7 @@ Docker works too (`docker compose up -d`), with `MEMBERS_FILE` instead of `MEMBE
 
 ## Moving a mesh onto it
 
-Needs noscat from `main` (0.5.0, not released yet). On any member:
+Needs noscat 0.5.0 or later. On any member:
 
 ```bash
 noscat mesh relays add wss://relay.example.com
