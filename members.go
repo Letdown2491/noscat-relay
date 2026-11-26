@@ -123,7 +123,7 @@ func (s MemberSource) Load(ctx context.Context) ([]string, error) {
 // Update loads the members into a. A failed or empty load keeps the
 // previous list: a hiccup in noscat must not lock the mesh out (or, worse,
 // open the relay to nobody's list).
-func (s MemberSource) Update(ctx context.Context, a *Allowlist) {
+func (s MemberSource) Update(ctx context.Context, a *Allowlist) bool {
 	pks, err := s.Load(ctx)
 	switch {
 	case err != nil:
@@ -135,12 +135,26 @@ func (s MemberSource) Update(ctx context.Context, a *Allowlist) {
 			log.Printf("members: %d (was %d)", len(pks), before)
 		}
 		a.Set(pks)
+		return true
 	}
+	return false
 }
 
-// Refresh loads the members now and then every interval.
+// firstLoadRetry is how soon a failed first load is retried, doubling up
+// to the refresh interval: at boot noscat may still be starting, and until
+// a load succeeds the relay lets nobody in.
+var firstLoadRetry = 2 * time.Second
+
+// Refresh loads the members now, retrying soon until that succeeds, and
+// then every interval.
 func (s MemberSource) Refresh(ctx context.Context, a *Allowlist, every time.Duration) {
-	s.Update(ctx, a)
+	for wait := firstLoadRetry; !s.Update(ctx, a); wait = min(wait*2, every) {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(wait):
+		}
+	}
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {

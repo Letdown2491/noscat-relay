@@ -48,10 +48,10 @@ systemctl --user enable --now noscat-relay
 journalctl --user -u noscat-relay -f
 ```
 
-When both units start at once (a reboot, a deploy), the relay's
-`MEMBERS_COMMAND` can hold noscat's state directory for a moment and
-`noscat up` exits with "this device is already running". Its unit restarts
-on failure, so it recovers within seconds; nothing needs doing.
+The two units can start in either order (a reboot, a deploy). With noscat
+0.6 or later, `noscat up` waits for a `MEMBERS_COMMAND` that is using its
+state directory, and the relay retries a failed first member load within
+seconds, so neither depends on the other being up first.
 
 STUN, so the mesh's devices learn their public address from this server:
 set `STUN_ADDR=:3478` in `.env`, open UDP 3478 on the host, restart the

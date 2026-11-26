@@ -12,6 +12,12 @@ All notable changes to this project are documented in this file.
   (`STUN_RATE_PER_MINUTE`); replies are about the size of the request, so
   it cannot amplify. Off by default.
 
+### Fixed
+
+- A failed first member load (at boot, noscat still starting) is retried
+  within seconds, backing off to `MEMBERS_REFRESH_SECONDS`, instead of
+  leaving the relay closed to every member until the next refresh.
+
 ## [0.1.0] (2026-11-25)
 
 First release as noscat-relay: a members-only relay for one noscat mesh,

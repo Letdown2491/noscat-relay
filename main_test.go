@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"runtime/debug"
 	"testing"
 	"time"
@@ -163,5 +166,34 @@ func TestRecheckReloadsOnMiss(t *testing.T) {
 	}
 	if loads != 1 {
 		t.Fatalf("%d reloads, want 1 (rate limited)", loads)
+	}
+}
+
+// At boot the members command can fail (noscat still starting): the first
+// load is retried soon, not after a whole refresh interval.
+func TestRefreshRetriesAFailedFirstLoad(t *testing.T) {
+	prev := firstLoadRetry
+	firstLoadRetry = 50 * time.Millisecond
+	t.Cleanup(func() { firstLoadRetry = prev })
+	file := filepath.Join(t.TempDir(), "members")
+	a := NewAllowlist()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go MemberSource{File: file}.Refresh(ctx, a, time.Hour)
+	time.Sleep(100 * time.Millisecond)
+	if a.Len() != 0 {
+		t.Fatalf("loaded %d before the file existed", a.Len())
+	}
+	pk := nostr.GeneratePrivateKey()
+	pub, _ := nostr.GetPublicKey(pk)
+	if err := os.WriteFile(file, []byte(pub+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for a.Len() != 1 {
+		if time.Now().After(deadline) {
+			t.Fatal("the failed first load was not retried")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
