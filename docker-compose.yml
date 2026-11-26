@@ -5,6 +5,9 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:3340:3340"
+      # STUN (only with STUN_ADDR=":3478" in .env): devices reach it
+      # directly, so it is published on all interfaces.
+      # - "3478:3478/udp"
     # Configuration comes from .env (copy .env.example to .env).
     env_file:
       - path: .env

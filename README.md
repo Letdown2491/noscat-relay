@@ -75,6 +75,8 @@ Docker works too (`docker compose up -d`), with `MEMBERS_FILE` instead of `MEMBE
 | `JOIN_RATE_PER_MINUTE` | `10` | Events per minute per joining device and per IP |
 | `MAX_CONTENT_KB` | `256` | Largest event content |
 | `RELAY_PORT` | `127.0.0.1:3340` | Listen address (plain WebSocket) |
+| `STUN_ADDR` | (off) | UDP address for STUN, e.g. `:3478`. The mesh's devices learn their public address here instead of from a third party's STUN server. Open this UDP port on the host: Caddy proxies TCP only |
+| `STUN_RATE_PER_MINUTE` | `60` | STUN requests per minute per source IP |
 | `WORKING_DIR` | `./noscat-relay-data` | Data directory |
 | `RELAY_NAME`, `RELAY_DESCRIPTION`, `RELAY_PUBKEY`, `RELAY_CONTACT`, `RELAY_ICON`, `RELAY_BANNER` | | NIP-11 information |
 

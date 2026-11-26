@@ -44,6 +44,13 @@ type Config struct {
 	MemberRatePerMinute int `envconfig:"MEMBER_RATE_PER_MINUTE" default:"120"`
 	JoinRatePerMinute   int `envconfig:"JOIN_RATE_PER_MINUTE" default:"10"`
 	MaxContentKB        int `envconfig:"MAX_CONTENT_KB" default:"256"`
+
+	// STUN on UDP, for the mesh's devices to learn their public address from
+	// this relay instead of a third party (e.g. ":3478"). Empty = off. Caddy
+	// proxies TCP only: this port is opened on the host directly.
+	STUNAddr string `envconfig:"STUN_ADDR"`
+	// STUN requests per minute per source IP.
+	STUNRatePerMinute int `envconfig:"STUN_RATE_PER_MINUTE" default:"60"`
 }
 
 func LoadConfig() Config {

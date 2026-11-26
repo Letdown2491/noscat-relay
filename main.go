@@ -176,6 +176,15 @@ func main() {
 		}
 	}()
 
+	if cfg.STUNAddr != "" {
+		limit := NewRateLimiter(cfg.STUNRatePerMinute, time.Minute)
+		go func() {
+			if err := serveSTUN(ctx, cfg.STUNAddr, limit); err != nil {
+				log.Fatalf("STUN: %s", err)
+			}
+		}()
+	}
+
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	log.Printf("Received %s: shutting down", <-sig)

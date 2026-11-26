@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.0] (unreleased)
+
+### Added
+
+- STUN (RFC 8489 binding requests only) on UDP when `STUN_ADDR` is set, so
+  a mesh's devices learn their public address from the mesh's own relay
+  instead of a third party. Rate limited per source IP
+  (`STUN_RATE_PER_MINUTE`); replies are about the size of the request, so
+  it cannot amplify. Off by default.
+
 ## [0.1.0] (2026-11-25)
 
 First release as noscat-relay: a members-only relay for one noscat mesh,
