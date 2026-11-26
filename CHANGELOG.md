@@ -17,6 +17,10 @@ All notable changes to this project are documented in this file.
 - A failed first member load (at boot, noscat still starting) is retried
   within seconds, backing off to `MEMBERS_REFRESH_SECONDS`, instead of
   leaving the relay closed to every member until the next refresh.
+- The last member list that loaded is kept (`members.cache` in the working
+  directory) and served from the start until the source answers. At boot
+  noscat may need this relay to start while the relay needs noscat for the
+  list; with nobody allowed, each waited out the other (26 s on a restart).
 
 ## [0.1.0] (2026-11-25)
 
