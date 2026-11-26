@@ -94,6 +94,40 @@ func ParseMembers(text string) []string {
 type MemberSource struct {
 	File    string
 	Command string
+	// Cache keeps the last list that loaded, for the next start: until a
+	// fresh load succeeds the relay serves that list instead of nobody.
+	// At boot noscat may need this relay to start, and the relay needs
+	// noscat for the list; with nobody allowed, each waited for the other.
+	Cache string
+}
+
+// LoadCache fills a with the list the last run loaded, if there is one.
+func (s MemberSource) LoadCache(a *Allowlist) {
+	if s.Cache == "" {
+		return
+	}
+	b, err := os.ReadFile(s.Cache)
+	if err != nil {
+		return
+	}
+	if pks := ParseMembers(string(b)); len(pks) > 0 {
+		a.Set(pks)
+		log.Printf("members: %d from the last run, until the source answers", len(pks))
+	}
+}
+
+func (s MemberSource) saveCache(pks []string) {
+	if s.Cache == "" {
+		return
+	}
+	tmp := s.Cache + ".tmp"
+	if err := os.WriteFile(tmp, []byte(strings.Join(pks, "\n")+"\n"), 0o600); err != nil {
+		log.Printf("members cache: %s", err)
+		return
+	}
+	if err := os.Rename(tmp, s.Cache); err != nil {
+		log.Printf("members cache: %s", err)
+	}
 }
 
 func (s MemberSource) Configured() bool { return s.File != "" || s.Command != "" }
@@ -135,6 +169,7 @@ func (s MemberSource) Update(ctx context.Context, a *Allowlist) bool {
 			log.Printf("members: %d (was %d)", len(pks), before)
 		}
 		a.Set(pks)
+		s.saveCache(pks)
 		return true
 	}
 	return false

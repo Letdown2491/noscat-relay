@@ -197,3 +197,26 @@ func TestRefreshRetriesAFailedFirstLoad(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+// The list that loaded last time is served at the next start, before the
+// source answers (at boot noscat may be waiting for this very relay).
+func TestTheLastListIsServedUntilTheSourceAnswers(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "members")
+	pk := nostr.GeneratePrivateKey()
+	pub, _ := nostr.GetPublicKey(pk)
+	if err := os.WriteFile(file, []byte(pub+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	src := MemberSource{File: file, Cache: filepath.Join(dir, "members.cache")}
+	if !src.Update(context.Background(), NewAllowlist()) {
+		t.Fatal("first load failed")
+	}
+	// Next start: the source is gone for now.
+	os.Remove(file)
+	a := NewAllowlist()
+	src.LoadCache(a)
+	if !a.Has(pub) || a.Len() != 1 {
+		t.Fatalf("cache not served: %d members", a.Len())
+	}
+}

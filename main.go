@@ -135,6 +135,8 @@ func main() {
 	defer stop()
 
 	members := NewAllowlist()
+	source.Cache = path.Join(cfg.WorkingDirectory, "members.cache")
+	source.LoadCache(members)
 	go source.Refresh(ctx, members, time.Duration(cfg.MembersRefreshSeconds)*time.Second)
 
 	groups := map[string]bool{}
