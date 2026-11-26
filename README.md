@@ -2,6 +2,8 @@
 
 A members-only Nostr relay for one [Noscat](https://github.com/Letdown2491/noscat) mesh. It carries only Noscat's events, and only for the mesh's devices.
 
+Setting up a whole private mesh (this relay, a reachable member, your devices) step by step: [Noscat's private mesh guide](https://github.com/Letdown2491/noscat/blob/main/docs/private-mesh.md).
+
 Run in place of public relays, it keeps a mesh's metadata off third-party infrastructure: which devices are in it, who gets invited, when each device is online. The storage load (adverts every two minutes per device) lands on your box instead of someone else's. Design and rationale: [Noscat#18](https://github.com/Letdown2491/noscat/issues/18).
 
 Forked from [nip46-relay](https://github.com/Letdown2491/nip46-relay), itself based on [Bunklay](https://github.com/dezh-tech/ddsr) from dezh-tech. Built on [khatru](https://github.com/fiatjaf/khatru).
@@ -28,7 +30,7 @@ Everything else is refused. A device that is not a member yet can still join thr
 
 ## Running it
 
-On the server that runs the mesh's reachable member (`noscat --reachable service install`), as the same user:
+On the server that runs the mesh's reachable member (`noscat --reachable service install`), as the same user, with Go 1.25 or later:
 
 ```bash
 git clone https://github.com/Letdown2491/noscat-relay ~/noscat-relay
