@@ -48,6 +48,15 @@ systemctl --user enable --now noscat-relay
 journalctl --user -u noscat-relay -f
 ```
 
+When both units start at once (a reboot, a deploy), the relay's
+`MEMBERS_COMMAND` can hold noscat's state directory for a moment and
+`noscat up` exits with "this device is already running". Its unit restarts
+on failure, so it recovers within seconds; nothing needs doing.
+
+STUN, so the mesh's devices learn their public address from this server:
+set `STUN_ADDR=:3478` in `.env`, open UDP 3478 on the host, restart the
+relay, and list it in the mesh once: `noscat mesh stun add <public ip>:3478`.
+
 Behind Caddy for TLS (see `Caddyfile.example`):
 
 ```caddyfile
