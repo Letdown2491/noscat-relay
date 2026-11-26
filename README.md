@@ -1,8 +1,8 @@
 # noscat-relay
 
-A members-only Nostr relay for one [noscat](https://github.com/Letdown2491/noscat) mesh. It carries only noscat's events, and only for the mesh's devices.
+A members-only Nostr relay for one [Noscat](https://github.com/Letdown2491/noscat) mesh. It carries only Noscat's events, and only for the mesh's devices.
 
-Run in place of public relays, it keeps a mesh's metadata off third-party infrastructure: which devices are in it, who gets invited, when each device is online. The storage load (adverts every two minutes per device) lands on your box instead of someone else's. Design and rationale: [noscat#18](https://github.com/Letdown2491/noscat/issues/18).
+Run in place of public relays, it keeps a mesh's metadata off third-party infrastructure: which devices are in it, who gets invited, when each device is online. The storage load (adverts every two minutes per device) lands on your box instead of someone else's. Design and rationale: [Noscat#18](https://github.com/Letdown2491/noscat/issues/18).
 
 Forked from [nip46-relay](https://github.com/Letdown2491/nip46-relay), itself based on [Bunklay](https://github.com/dezh-tech/ddsr) from dezh-tech. Built on [khatru](https://github.com/fiatjaf/khatru).
 
@@ -38,7 +38,7 @@ cp .env.example .env
 nano .env   # RELAY_URL, and MEMBERS_COMMAND if noscat is elsewhere
 ```
 
-As a systemd user service, next to noscat's:
+As a systemd user service, next to Noscat's:
 
 ```bash
 mkdir -p ~/.config/systemd/user
@@ -48,7 +48,7 @@ systemctl --user enable --now noscat-relay
 journalctl --user -u noscat-relay -f
 ```
 
-The two units can start in either order (a reboot, a deploy). With noscat
+The two units can start in either order (a reboot, a deploy). With Noscat
 0.6 or later, `noscat up` waits for a `MEMBERS_COMMAND` that is using its
 state directory, and the relay retries a failed first member load within
 seconds, so neither depends on the other being up first.
@@ -91,7 +91,7 @@ Docker works too (`docker compose up -d`), with `MEMBERS_FILE` instead of `MEMBE
 
 ## Moving a mesh onto it
 
-Needs noscat 0.5.0 or later. On any member:
+Needs Noscat 0.5.0 or later. On any member:
 
 ```bash
 noscat mesh relays add wss://relay.example.com
@@ -100,9 +100,9 @@ noscat mesh relays remove wss://relay.snort.social   # and the other public ones
 noscat mesh relays         # check
 ```
 
-`mesh private` publishes on the relays in use until then, so members that are offline pick it up from the public relays when they come back. From then on every device uses only the mesh's relays and logs in to them with its device key; noscat never logs in to any other relay.
+`mesh private` publishes on the relays in use until then, so members that are offline pick it up from the public relays when they come back. From then on every device uses only the mesh's relays and logs in to them with its device key; Noscat never logs in to any other relay.
 
-New devices join with a member's QR (`noscat mesh qr`, or the one `noscat up` prints), which now names the relay: `noscat:npub1...?relay=wss%3A%2F%2Frelay.example.com`. Scanning it in the apps, or `noscat mesh join '<that code>'`, joins through this relay alone. When the member whose QR was scanned is the noscat service on this server, approve the request there with `noscat mesh requests` (it asks y/n for each device that asked to join).
+New devices join with a member's QR (`noscat mesh qr`, or the one `noscat up` prints), which now names the relay: `noscat:npub1...?relay=wss%3A%2F%2Frelay.example.com`. Scanning it in the apps, or `noscat mesh join '<that code>'`, joins through this relay alone. When the member whose QR was scanned is the Noscat service on this server, approve the request there with `noscat mesh requests` (it asks y/n for each device that asked to join).
 
 A new mesh can start here directly: `noscat --relay wss://relay.example.com up`, then `noscat mesh create <name>` and `noscat mesh private`.
 
