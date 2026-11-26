@@ -30,14 +30,24 @@ Everything else is refused. A device that is not a member yet can still join thr
 
 ## Running it
 
-On the server that runs the mesh's reachable member (`noscat --reachable service install`), as the same user, with Go 1.25 or later:
+On the server that runs the mesh's reachable member (`noscat --reachable service install`), as the same user. Releases ship static Linux binaries (`noscat-relay-linux-amd64` and `-arm64`, with `SHA256SUMS`):
+
+```bash
+mkdir -p ~/noscat-relay && cd ~/noscat-relay
+curl -fsSL -o noscat-relay https://github.com/Letdown2491/noscat-relay/releases/latest/download/noscat-relay-linux-amd64
+chmod +x noscat-relay
+curl -fsSLO https://raw.githubusercontent.com/Letdown2491/noscat-relay/main/noscat-relay.service
+curl -fsSL -o .env https://raw.githubusercontent.com/Letdown2491/noscat-relay/main/.env.example
+nano .env   # RELAY_URL, and MEMBERS_COMMAND if noscat is elsewhere
+```
+
+Or build it from source, with Go 1.25 or later:
 
 ```bash
 git clone https://github.com/Letdown2491/noscat-relay ~/noscat-relay
 cd ~/noscat-relay
 go build -trimpath -ldflags="-s -w" -o noscat-relay .
 cp .env.example .env
-nano .env   # RELAY_URL, and MEMBERS_COMMAND if noscat is elsewhere
 ```
 
 As a systemd user service, next to Noscat's:
