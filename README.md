@@ -18,12 +18,13 @@ Every connection logs in with its device key (NIP-42) before it reads or writes 
 | 1059 | Gift wraps (invitations, join requests) | anyone logged in | only those addressed to you (`#p`) |
 | 30443 | Key packages | your own | members, scoped by author |
 | 10050, 10002 | Inbox and relay lists | your own | anyone logged in, scoped by author |
+| 5 | Deletion of your own key package (after a join) | your own, by `a` coordinate only | nobody |
 
 Everything else is refused. A device that is not a member yet can still join through this relay alone: it publishes its key package, relay lists and a join request, and picks up its invitation. Group traffic stays members only.
 
 - **Members** come from the mesh itself: the output of `noscat mesh members` (or a file), re-read every minute, and at once (at most every two seconds) when a logged-in key the relay does not know asks for group messages or key packages, so a device that just joined is let in right away. A failed read keeps the previous list.
 - **Removal is immediate**: a removed device's open subscriptions stop receiving group messages, and its next query or event is refused.
-- **Retention**: group messages and gift wraps are deleted after 30 days (configurable). A device offline for longer cannot catch up and must rejoin. Relay lists and key packages are replaceable and kept.
+- **Retention**: group messages, gift wraps and deletion requests are deleted after 30 days (configurable). A device offline for longer cannot catch up and must rejoin. Relay lists and key packages are replaceable and kept.
 - **Timestamps**: within 15 minutes of now; gift wraps may be backdated up to two days, as NIP-59 allows.
 - **Rate limits** per logged-in member, and per joining device and per IP. Group messages and gift wraps are signed by a fresh random key per event, so limits by author would not work.
 - **Storage**: badger on disk, synchronous writes (a lost commit would split the mesh), tuned for a 1 GB box.

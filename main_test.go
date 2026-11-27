@@ -66,6 +66,13 @@ func TestCheckEvent(t *testing.T) {
 		{"gift wrap backdated three days", ev(KindGiftWrap, randomPK, 72*time.Hour), memberPK, true},
 		{"group message an hour old", ev(KindGroup, randomPK, time.Hour, h), memberPK, true},
 		{"from the future", ev(KindGroup, randomPK, -time.Hour, h), memberPK, true},
+		{"deleting own key package", ev(KindDeletion, joinerPK, 0, nostr.Tag{"a", "30443:" + joinerPK + ":ab"}, nostr.Tag{"k", "30443"}), joinerPK, false},
+		{"deletion not logged in", ev(KindDeletion, joinerPK, 0, nostr.Tag{"a", "30443:" + joinerPK + ":ab"}), "", true},
+		{"deleting someone else's key package", ev(KindDeletion, joinerPK, 0, nostr.Tag{"a", "30443:" + memberPK + ":ab"}), joinerPK, true},
+		{"deletion signed by someone else", ev(KindDeletion, memberPK, 0, nostr.Tag{"a", "30443:" + memberPK + ":ab"}), joinerPK, true},
+		{"deleting another kind", ev(KindDeletion, joinerPK, 0, nostr.Tag{"a", "10002:" + joinerPK + ":"}), joinerPK, true},
+		{"deleting by event id", ev(KindDeletion, joinerPK, 0, nostr.Tag{"e", "00"}), joinerPK, true},
+		{"deletion naming nothing", ev(KindDeletion, joinerPK, 0), joinerPK, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -123,6 +130,7 @@ func TestCheckFilter(t *testing.T) {
 		{"joiner reads inbox relays", nostr.Filter{Kinds: []int{KindInbox}, Authors: []string{memberPK}}, joinerPK, false},
 		{"relay lists unscoped", nostr.Filter{Kinds: []int{KindRelayList}}, memberPK, true},
 		{"other kinds: empty answer", nostr.Filter{Kinds: []int{1}}, joinerPK, false},
+		{"deletion requests", nostr.Filter{Kinds: []int{KindDeletion}, Authors: []string{joinerPK}}, memberPK, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

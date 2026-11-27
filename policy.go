@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/fiatjaf/khatru"
@@ -16,6 +17,10 @@ const (
 	KindRelayList  = 10002 // a device's relay list, authored by the device
 	KindGiftWrap   = 1059  // NIP-59 gift wrap (Welcome, join request), random signer
 	KindGroup      = 445   // Marmot group message (commit, advert), random signer
+	// KindDeletion is a NIP-09 deletion request. Accepted only for the
+	// author's own key packages (a device deletes its used one after it
+	// joins); khatru carries out the deletion. Never served back.
+	KindDeletion = 5
 )
 
 // giftWrapBackdate is how far NIP-59 lets a gift wrap's created_at lie in
@@ -33,7 +38,37 @@ func isNoscatKind(k int) bool {
 // ownedKind: events of these kinds are signed by the device itself, so
 // their author must be the authenticated device.
 func ownedKind(k int) bool {
-	return k == KindKeyPackage || k == KindInbox || k == KindRelayList
+	return k == KindKeyPackage || k == KindInbox || k == KindRelayList || k == KindDeletion
+}
+
+// checkDeletion: a deletion request may only name key packages of its own
+// author, by `a` coordinate (`30443:<pubkey>:<slot>`), plus `k` tags; ""
+// when it does.
+func checkDeletion(evt *nostr.Event) string {
+	prefix := fmt.Sprintf("%d:%s:", KindKeyPackage, evt.PubKey)
+	coordinates := 0
+	for _, t := range evt.Tags {
+		if len(t) < 2 {
+			continue
+		}
+		switch t[0] {
+		case "a":
+			if !strings.HasPrefix(t[1], prefix) || len(t[1]) == len(prefix) {
+				return "restricted: delete only your own key packages"
+			}
+			coordinates++
+		case "k":
+			if t[1] != fmt.Sprint(KindKeyPackage) {
+				return "restricted: delete only your own key packages"
+			}
+		default:
+			return "restricted: delete only your own key packages, by coordinate"
+		}
+	}
+	if coordinates == 0 {
+		return "invalid: a deletion request must name a key package"
+	}
+	return ""
 }
 
 // Policy decides what the relay accepts. Writes and reads need a NIP-42
@@ -84,11 +119,16 @@ func firstTag(evt *nostr.Event, name string) (string, bool) {
 // not logged in) and `ip` the client address. Reasons use the NIP-01
 // machine-readable prefixes; "auth-required:" makes khatru send a challenge.
 func (p *Policy) CheckEvent(evt *nostr.Event, authed, ip string) (reject bool, msg string) {
-	if !isNoscatKind(evt.Kind) {
+	if !isNoscatKind(evt.Kind) && evt.Kind != KindDeletion {
 		return true, "blocked: this relay only carries noscat events"
 	}
 	if authed == "" {
 		return true, "auth-required: log in with your device key"
+	}
+	if evt.Kind == KindDeletion {
+		if msg := checkDeletion(evt); msg != "" {
+			return true, msg
+		}
 	}
 	if p.MaxContentBytes > 0 && len(evt.Content) > p.MaxContentBytes {
 		return true, fmt.Sprintf("invalid: content larger than %d bytes", p.MaxContentBytes)
@@ -147,6 +187,11 @@ func (p *Policy) CheckFilter(f nostr.Filter, authed string) (reject bool, msg st
 	}
 	if len(f.Kinds) == 0 {
 		return true, "blocked: queries must name their kinds"
+	}
+	for _, k := range f.Kinds {
+		if k == KindDeletion {
+			return true, "blocked: deletion requests are not served"
+		}
 	}
 	member := p.Members.Has(authed)
 	for _, k := range f.Kinds {

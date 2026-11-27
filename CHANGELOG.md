@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Kind 5 (NIP-09) deletion requests for the author's own key packages,
+  by `a` coordinate only. Noscat 0.6.1 deletes a device's used key package
+  after it joins, so a stale copy cannot be used to invite it again. The
+  relay carries out the deletion and never serves the request back; the
+  requests are pruned with group messages and gift wraps.
+
 ## [0.2.0] (2026-11-26)
 
 ### Added

@@ -52,7 +52,7 @@ func prune(ctx context.Context, b *badger.BadgerBackend, retention time.Duration
 }
 
 func pruneBatch(ctx context.Context, b *badger.BadgerBackend, cutoff nostr.Timestamp) int {
-	ch, err := b.QueryEvents(ctx, nostr.Filter{Kinds: []int{KindGroup, KindGiftWrap}, Until: &cutoff, Limit: maxLimit})
+	ch, err := b.QueryEvents(ctx, nostr.Filter{Kinds: []int{KindGroup, KindGiftWrap, KindDeletion}, Until: &cutoff, Limit: maxLimit})
 	if err != nil {
 		log.Printf("prune: %s", err)
 		return 0
